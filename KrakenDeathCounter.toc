@@ -1,11 +1,12 @@
 ## Interface: 16001
 ## Title: Kraken Death Counter
-## Notes: On-screen death counter for streaming, read from your character's "Total deaths" statistic. /kdc
+## Notes: On-screen death counter for streaming, read from your character's "Total deaths" statistic, and a log of what killed you. /kdc
 ## Author: The Kraken
-## Version: 1.0.0
+## Version: 1.1.0
 ## IconTexture: Interface\Icons\Ability_Rogue_FeignDeath
 ## DefaultState: enabled
 ## SavedVariables: KrakenDeathCounter_DB
 ## SavedVariablesPerCharacter: KrakenDeathCounter_Char
 
 KrakenDeathCounter.lua
+DeathLog.lua

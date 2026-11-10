@@ -6,7 +6,7 @@
 -- GetAchievementInfo(statID); this addon finds the "Total deaths" row the same way.
 -- If the statistic can't be read, it falls back to counting PLAYER_DEAD itself.
 
-local ADDON_NAME = ...
+local ADDON_NAME, ns = ...
 local TITLE = "Kraken Death Counter"
 local TOTAL_DEATHS_NAMES = { ["Total deaths"] = true }
 local TOTAL_DEATHS_RETAIL_ID = 60   -- the long-standing statistic ID, checked by name before use
@@ -30,6 +30,7 @@ local lastShown
 local function say(msg)
     DEFAULT_CHAT_FRAME:AddMessage("|cffff5555" .. TITLE .. "|r: " .. msg)
 end
+ns.say = say
 
 local function safe(fn, ...)
     if type(fn) ~= "function" then return nil end
@@ -187,9 +188,13 @@ frame:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
     GameTooltip:AddLine(TITLE)
     GameTooltip:AddLine("Drag to move. /kdc lock to lock it in place.", 1, 1, 1, true)
+    GameTooltip:AddLine("Right-click: what killed me (/kdc log).", 1, 1, 1, true)
+    local last = ns.LastDeath and ns.LastDeath()
+    if last then GameTooltip:AddLine("Last death: " .. ns.DeathLine(last, true), 0.8, 0.8, 0.8, true) end
     GameTooltip:Show()
 end)
 frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+frame:SetScript("OnMouseUp", function(_, button) if button == "RightButton" then ns.ToggleLog() end end)
 
 ---------------------------------------------------------------- events
 local events = CreateFrame("Frame")
@@ -205,8 +210,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
         KrakenDeathCounter_Char = KrakenDeathCounter_Char or {}
         db, char = KrakenDeathCounter_DB, KrakenDeathCounter_Char
         for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
+        ns.InitLog(db, char)
         ApplySettings()
     elseif event == "PLAYER_DEAD" then
+        ns.OnDeath()
         sessionDeaths = sessionDeaths + 1
         char.trackedSinceStat = (char.trackedSinceStat or 0) + 1
         Refresh()
@@ -230,6 +237,11 @@ local HELP = {
     "/kdc bg - toggle the background box",
     "/kdc reset - move it back to the top of the screen",
     "/kdc status - show where the number comes from",
+    "/kdc log - what killed me (also: right-click the counter while unlocked)",
+    "/kdc last - print your last death",
+    "/kdc clearlog - erase this character's death log",
+    "/kdc import - add earlier deaths from Kraken Log's records",
+    "/kdc announce - toggle the 'Killed by' chat line after each death",
 }
 
 SLASH_KRAKENDEATHCOUNTER1 = "/kdc"
@@ -251,6 +263,26 @@ SlashCmdList.KRAKENDEATHCOUNTER = function(msg)
     elseif cmd == "icon" then db.showIcon = not db.showIcon
     elseif cmd == "bg" then db.background = not db.background
     elseif cmd == "reset" then db.point = { unpack(DEFAULTS.point) }
+    elseif cmd == "log" then ns.ToggleLog(); return
+    elseif cmd == "last" then
+        local last = ns.LastDeath()
+        say(last and ("Last death: " .. ns.DeathLine(last, true) .. (last.zone and (" in " .. last.zone) or "") .. ".")
+            or "No deaths logged for this character yet.")
+        return
+    elseif cmd == "clearlog" then
+        local n = ns.ClearLog()
+        say(("Erased %d death%s from this character's log."):format(n, n == 1 and "" or "s"))
+        return
+    elseif cmd == "import" then
+        if not rawget(_G, "KrakenLog_DB") then say("Kraken Log isn't installed or enabled, so there's nothing to import."); return end
+        local n = ns.ImportKrakenLog()
+        say(n > 0 and ("Added %d earlier death%s from Kraken Log's records."):format(n, n == 1 and "" or "s")
+            or "No deaths in Kraken Log's records that aren't already in the log.")
+        return
+    elseif cmd == "announce" then
+        db.announce = not db.announce
+        say("Chat line after each death: " .. (db.announce and "on." or "off."))
+        return
     elseif cmd == "status" then
         local total, fromServer = Count()
         if fromServer then
